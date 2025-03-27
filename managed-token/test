@@ -1,0 +1,78 @@
+use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
+
+declare_id!("6runpg3QmHaHNTXF7tyCd57JQQnjPvdk54bk897fpump"); // CA added
+
+#[program]
+pub mod managed_token_test {
+    use super::*;
+
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        let mint = &mut ctx.accounts.mint;
+        mint.decimals = 9;
+        mint.mint_authority = Some(PUBKEY_CA); // Set CA as the mint authority
+        Ok(())
+    }
+
+    pub fn mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
+        let cpi_accounts = token::MintTo {
+            mint: ctx.accounts.mint.to_account_info(),
+            to: ctx.accounts.recipient.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+        token::mint_to(cpi_ctx, amount)?;
+        Ok(())
+    }
+
+    pub fn transfer_tokens(ctx: Context<TransferTokens>, amount: u64) -> Result<()> {
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.from.to_account_info(),
+            to: ctx.accounts.to.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+        token::transfer(cpi_ctx, amount)?;
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(init, payer = payer, mint::decimals = 9, mint::authority = authority)]
+    pub mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(address = PUBKEY_CA)] // Ensure only CA is used as authority
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct MintTokens<'info> {
+    #[account(mut)]
+    pub mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub recipient: Account<'info, TokenAccount>,
+    #[account(address = PUBKEY_CA)] // CA authority for minting
+    pub authority: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct TransferTokens<'info> {
+    #[account(mut)]
+    pub from: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub to: Account<'info, TokenAccount>,
+    #[account(address = PUBKEY_CA)] // CA authority for transfers
+    pub authority: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+// Define the constant public key for CA
+pub const PUBKEY_CA: Pubkey = Pubkey::new_from_array([
+    54, 114, 117, 110, 112, 103, 51, 81, 109, 72, 97, 72, 78, 84, 88, 70, 
+    55, 116, 121, 67, 100, 53, 55, 74, 81, 81, 110, 106, 80, 118, 100, 107
+]);
